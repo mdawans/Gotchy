@@ -20,3 +20,14 @@ if not GROQ_API_KEY:
 
 # Le modele d'IA gratuit qu'on utilise (Llama 3.3 70B via Groq).
 MODELE = "llama-3.3-70b-versatile"
+
+# --- Supabase (memoire cloud) : adresse + cle secrete ---
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    try:
+        import streamlit as st
+        SUPABASE_URL = SUPABASE_URL or st.secrets.get("SUPABASE_URL")
+        SUPABASE_KEY = SUPABASE_KEY or st.secrets.get("SUPABASE_KEY")
+    except Exception:
+        pass

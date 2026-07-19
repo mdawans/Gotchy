@@ -1,30 +1,21 @@
-import json
-import os
+from supabase import create_client
+import config
 
-# Le fichier de memoire est dans KAIZEN/data/memory.json
-_RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DOSSIER = os.path.join(_RACINE, "data")
-_FICHIER = os.path.join(_DOSSIER, "memory.json")
+# On se connecte a la base de donnees Supabase (memoire CLOUD, partagee PC <-> telephone).
+_client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
 
 def charger():
-    """Charge la memoire (les messages passes). Renvoie un dict {'messages': [...]}."""
-    if os.path.exists(_FICHIER):
-        try:
-            with open(_FICHIER, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {"messages": []}
+    """Charge TOUS les messages passes depuis Supabase, dans l'ordre. Renvoie une liste."""
+    res = _client.table("messages").select("role, content").order("id").execute()
+    return res.data or []
 
 
-def sauver(memoire):
-    """Ecrit la memoire dans data/memory.json (cree le dossier si besoin)."""
-    os.makedirs(_DOSSIER, exist_ok=True)
-    with open(_FICHIER, "w", encoding="utf-8") as f:
-        json.dump(memoire, f, ensure_ascii=False, indent=2)
+def ajouter_message(role, content):
+    """Sauve UN message (role = 'user' ou 'assistant') dans la memoire cloud."""
+    _client.table("messages").insert({"role": role, "content": content}).execute()
 
 
 def effacer():
-    """Vide la memoire (pour repartir sur une nouvelle conversation)."""
-    sauver({"messages": []})
+    """Vide toute la memoire (nouvelle conversation)."""
+    _client.table("messages").delete().neq("id", 0).execute()

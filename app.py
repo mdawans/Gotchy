@@ -32,25 +32,26 @@ with st.sidebar:
     st.divider()
     if st.button("🗑️ Nouvelle conversation"):
         memory.effacer()
-        st.session_state.memoire = {"messages": []}
+        st.session_state.messages = []
         st.rerun()
 
 st.header("💬 Copilote")
 
-# --- Memoire : on charge les conversations passees (une fois par session) ---
-if "memoire" not in st.session_state:
-    st.session_state.memoire = memory.charger()
-messages = st.session_state.memoire["messages"]
+# --- Memoire CLOUD (Supabase) : on charge les conversations passees (une fois par session) ---
+if "messages" not in st.session_state:
+    st.session_state.messages = memory.charger()
+messages = st.session_state.messages
 
-# Afficher tout l'historique (meme celui d'avant, grace a la memoire !)
+# Afficher tout l'historique (meme celui d'avant, et depuis n'importe quel appareil !)
 for msg in messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # --- Zone de saisie en bas ---
 if question := st.chat_input("Pose ta question a Gotchy..."):
-    # 1) On ajoute et affiche le message de Morgan
+    # 1) On ajoute et affiche le message de Morgan (+ on le sauve dans le cloud)
     messages.append({"role": "user", "content": question})
+    memory.ajouter_message("user", question)
     with st.chat_message("user"):
         st.markdown(question)
 
@@ -61,5 +62,5 @@ if question := st.chat_input("Pose ta question a Gotchy..."):
         st.markdown(reponse)
     messages.append({"role": "assistant", "content": reponse})
 
-    # 3) On SAUVEGARDE tout -> Gotchy s'en souviendra meme apres fermeture ! 💾
-    memory.sauver(st.session_state.memoire)
+    # 3) On sauve la reponse dans le cloud -> memoire partagee PC <-> telephone ! 💾☁️
+    memory.ajouter_message("assistant", reponse)
