@@ -7,8 +7,16 @@ from dotenv import load_dotenv
 _ICI = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_ICI, ".env"))
 
-# La cle API Groq : lue dans le .env, JAMAIS ecrite en dur dans le code.
+# La cle API Groq : lue dans le .env (sur ton PC), JAMAIS ecrite en dur dans le code.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# Sur Streamlit Cloud (en ligne), il n'y a pas de .env : la cle est dans les "Secrets".
+if not GROQ_API_KEY:
+    try:
+        import streamlit as st
+        GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+    except Exception:
+        pass
 
 # Le modele d'IA gratuit qu'on utilise (Llama 3.3 70B via Groq).
 MODELE = "llama-3.3-70b-versatile"
