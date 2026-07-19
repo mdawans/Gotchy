@@ -1,33 +1,31 @@
 import os
 from dotenv import load_dotenv
 
-# Charge le fichier .env qui est a cote de ce fichier (racine du projet KAIZEN).
-# On calcule le chemin a partir de l'emplacement de config.py -> marche peu importe
-# le dossier depuis lequel on lance le programme.
+# Charge le fichier .env qui est a cote de ce fichier (racine du projet).
 _ICI = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_ICI, ".env"))
 
-# La cle API Groq : lue dans le .env (sur ton PC), JAMAIS ecrite en dur dans le code.
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Sur Streamlit Cloud (en ligne), il n'y a pas de .env : la cle est dans les "Secrets".
-if not GROQ_API_KEY:
+def _lire_secret(cle):
+    """Lit une cle : d'abord dans .env (sur le PC), sinon dans les Secrets Streamlit (en ligne)."""
+    valeur = os.getenv(cle)
+    if valeur:
+        return valeur
     try:
         import streamlit as st
-        GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+        if cle in st.secrets:
+            return st.secrets[cle]
     except Exception:
         pass
+    return None
+
+
+# La cle API Groq (l'IA).
+GROQ_API_KEY = _lire_secret("GROQ_API_KEY")
 
 # Le modele d'IA gratuit qu'on utilise (Llama 3.3 70B via Groq).
 MODELE = "llama-3.3-70b-versatile"
 
-# --- Supabase (memoire cloud) : adresse + cle secrete ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    try:
-        import streamlit as st
-        SUPABASE_URL = SUPABASE_URL or st.secrets.get("SUPABASE_URL")
-        SUPABASE_KEY = SUPABASE_KEY or st.secrets.get("SUPABASE_KEY")
-    except Exception:
-        pass
+# Supabase (memoire cloud) : adresse + cle secrete.
+SUPABASE_URL = _lire_secret("SUPABASE_URL")
+SUPABASE_KEY = _lire_secret("SUPABASE_KEY")
