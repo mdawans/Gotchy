@@ -1,0 +1,11 @@
+# Secrets — NE JAMAIS mettre sur git !
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Données perso de KAIZEN (mémoire des conversations)
+data/memory.json
