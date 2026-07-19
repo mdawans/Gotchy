@@ -1,4 +1,8 @@
 import urllib.parse
+import base64
+import time
+import requests
+import config
 from core.llm import demander_llm
 
 # Studio Media : generation d'images GRATUITE avec Pollinations.ai (aucune cle necessaire !).
@@ -40,3 +44,109 @@ def image_depuis_texte(description, largeur=1024, hauteur=1024, graine=None):
     if graine is not None:
         url += f"&seed={graine}"
     return url
+
+
+def _telecharger_image(url, essais=5):
+    """Recupere les octets de l'image depuis son URL Pollinations.
+    Si le service repond 429 (trop de requetes), on attend et on reessaie (patience)."""
+    rep = None
+    for i in range(essais):
+        rep = requests.get(url, timeout=90)
+        if rep.status_code == 200:
+            return rep.content
+        if rep.status_code == 429:
+            time.sleep(3 * (i + 1))  # on attend de plus en plus longtemps a chaque essai
+            continue
+        rep.raise_for_status()
+    rep.raise_for_status()  # toujours pas bon apres tous les essais -> on leve l'erreur
+    return rep.content
+
+
+def verifier_image(image_bytes, demande):
+    """Un modele VISION regarde l'image et dit si elle correspond a la demande.
+    Renvoie (est_bon: bool, avis: str). On juge la FIDELITE a la demande, pas le realisme."""
+    b64 = base64.b64encode(image_bytes).decode()
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Regarde cette image. La demande etait : \"{demande}\". Est-ce que l'image "
+                        "correspond FIDELEMENT a la demande (on juge la fidelite a la demande, PAS le "
+                        "realisme du monde reel) ? Reponds en commencant STRICTEMENT par 'OUI' ou 'NON', "
+                        "puis si NON explique en UNE phrase ce qui cloche et doit etre corrige."
+                    ),
+                },
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            ],
+        },
+    ]
+    avis = demander_llm(messages, modele=config.MODELE_VISION)
+    est_bon = avis.strip().upper().startswith("OUI")
+    return est_bon, avis
+
+
+def _ameliorer_avec_retour(demande, prompt_actuel, retour):
+    """Corrige le prompt en anglais en tenant compte de ce que le verificateur a signale."""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Tu es prompt engineer pour un generateur d'images. Le prompt precedent n'a pas donne le "
+                "bon resultat. Corrige-le (en anglais, detaille) pour regler le probleme signale, en gardant "
+                "la demande d'origine. Reponds avec SEULEMENT le nouveau prompt, sans rien autour."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Demande d'origine: {demande}\nPrompt precedent: {prompt_actuel}\nProbleme a corriger: {retour}",
+        },
+    ]
+    return demander_llm(messages).strip()
+
+
+def _ajouter_qualite(prompt):
+    """Ajoute des mots-clés de haute qualité au prompt s'ils ne sont pas déjà présents.
+    Inclut également des termes spécifiques pour améliorer les petits détails (yeux, visage, etc.)."""
+    mots_qualite = [
+        "4k",
+        "ultra detailed",
+        "sharp focus",
+        "highly detailed",
+        "photo realistic",
+        "studio lighting",
+        "close-up",
+        "eye detail",
+        "portrait",
+        "depth of field",
+    ]
+    prompt_lower = prompt.lower()
+    for mot in mots_qualite:
+        if mot not in prompt_lower:
+            prompt = f"{prompt}, {mot}"
+            # Met à jour la version en minuscules pour les vérifications suivantes
+            prompt_lower = prompt.lower()
+    # Nettoie les éventuelles virgules en trop
+    return prompt.strip().strip(",")
+
+
+def generer_intelligent(demande, max_essais=3):
+    """Genere une image, la VERIFIE avec la vision, et CORRIGE jusqu'a max_essais fois.
+    Renvoie (url_finale, historique) ou historique est la liste des essais."""
+    historique = []
+    prompt = ameliorer_description(demande)
+    prompt = _ajouter_qualite(prompt)
+    url = None
+    for essai in range(1, max_essais + 1):
+        url = image_depuis_texte(prompt, graine=essai)
+        image_bytes = _telecharger_image(url)
+        est_bon, avis = verifier_image(image_bytes, demande)
+        historique.append({"essai": essai, "prompt": prompt, "url": url, "bon": est_bon, "avis": avis})
+        if est_bon:
+            break
+        # sinon on corrige le prompt avec le retour et on retente
+        prompt = _ameliorer_avec_retour(demande, prompt, avis)
+        prompt = _ajouter_qualite(prompt)
+    return url, historique

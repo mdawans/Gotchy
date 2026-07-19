@@ -26,9 +26,20 @@ GROQ_API_KEY = _lire_secret("GROQ_API_KEY")
 # Le modele d'IA gratuit qu'on utilise (Llama 3.3 70B via Groq).
 MODELE = "llama-3.3-70b-versatile"
 
+# Le modele VISION de Groq (qui sait REGARDER les images) pour verifier la generation d'images.
+MODELE_VISION = "qwen/qwen3.6-27b"
+
 # Supabase (memoire cloud) : adresse + cle secrete.
 SUPABASE_URL = _lire_secret("SUPABASE_URL")
 SUPABASE_KEY = _lire_secret("SUPABASE_KEY")
 
 # VirusTotal (module Securite : scan de fichiers par ~70 antivirus).
 VIRUSTOTAL_KEY = _lire_secret("VIRUSTOTAL_KEY")
+
+# Pseudo de l'ADMIN (Morgan) : seul lui voit le module Auto-amelioration.
+ADMIN_PSEUDO = _lire_secret("ADMIN_PSEUDO")
+
+# Auto-amelioration : le "codeur" (grosse IA de raisonnement, meilleure en code)
+MODELE_CODE = "openai/gpt-oss-120b"
+# ... et le "testeur" INDEPENDANT qui relit (une AUTRE IA = regard neuf, l'idee de Morgan)
+MODELE_REVIEWER = "qwen/qwen3.6-27b"
