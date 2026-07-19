@@ -1,4 +1,4 @@
-# KAIZEN 🤖
+# Gotchy 🤖
 
 Mon assistant IA personnel, fait par Morgan.
 
