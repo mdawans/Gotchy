@@ -29,3 +29,6 @@ MODELE = "llama-3.3-70b-versatile"
 # Supabase (memoire cloud) : adresse + cle secrete.
 SUPABASE_URL = _lire_secret("SUPABASE_URL")
 SUPABASE_KEY = _lire_secret("SUPABASE_KEY")
+
+# VirusTotal (module Securite : scan de fichiers par ~70 antivirus).
+VIRUSTOTAL_KEY = _lire_secret("VIRUSTOTAL_KEY")
