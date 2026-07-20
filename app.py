@@ -9,6 +9,7 @@ from core import security
 from core import auth
 from core import evolution
 from core import recherche
+from core import voix
 
 st.set_page_config(page_title="Gotchy", page_icon="🤖", layout="wide")
 
@@ -116,6 +117,16 @@ with st.sidebar:
     if not est_admin:
         st.markdown("🖥️ Controle Systeme *(bientot)*")
 
+    # --- Controles VOIX (Copilote uniquement) : dans la sidebar = TOUJOURS visibles ---
+    parler_actif = False
+    audio = None
+    if module == "💬 Copilote":
+        st.divider()
+        st.markdown("### 🎙️ Voix")
+        parler_actif = st.checkbox("🔊 Gotchy me repond a voix haute")
+        with st.popover("🎤 Parler"):
+            audio = st.audio_input("Enregistre ta question", label_visibility="collapsed")
+
     st.divider()
     if st.button("🗑️ Nouvelle conversation"):
         memory.effacer(pseudo)
@@ -142,15 +153,29 @@ def page_copilote():
         with st.chat_message(msg["role"]):
             afficher_message(msg["content"])
 
-    # Zone de saisie en bas (avec bouton 📎 pour joindre une image / prendre une photo)
+    # La voix (micro 🎤 + option 🔊) est dans la barre laterale (toujours visible). Ici : saisie texte/image.
     saisie = st.chat_input(
         "Pose ta question a Gotchy...",
         accept_file=True,
         file_type=["png", "jpg", "jpeg"],
     )
-    if saisie:
+
+    # On determine le message : un NOUVEL enregistrement vocal en priorite, sinon le texte/image tape
+    texte = None
+    image = None
+    if audio is not None:
+        octets_audio = audio.getvalue()
+        empreinte = hash(octets_audio)
+        if st.session_state.get("dernier_audio") != empreinte:
+            st.session_state["dernier_audio"] = empreinte
+            with st.spinner("Gotchy t'ecoute... 🎧"):
+                texte = voix.transcrire(octets_audio)  # Whisper : voix -> texte
+    if texte is None and saisie:
         texte = saisie.text or ""
         image = saisie.files[0] if saisie.files else None
+
+    if (texte and texte.strip()) or image is not None:
+        texte = texte or ""
 
         # 1) Message de Morgan (affichage + memoire ; si image, on le note dans l'historique)
         if image and texte:
@@ -197,6 +222,12 @@ def page_copilote():
                 contenu = reponse
 
             afficher_message(contenu)
+
+            # 3) Option voix : Gotchy lit sa reponse a voix haute (gTTS)
+            if parler_actif:
+                with st.spinner("Gotchy prepare sa voix... 🔊"):
+                    audio_reponse = voix.parler(reponse)
+                st.audio(audio_reponse, format="audio/mp3", autoplay=True)
 
         messages.append({"role": "assistant", "content": contenu})
         memory.ajouter_message(pseudo, "assistant", contenu)
