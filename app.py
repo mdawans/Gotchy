@@ -1,3 +1,4 @@
+import random
 import streamlit as st
 from streamlit_local_storage import LocalStorage
 import config
@@ -7,8 +8,26 @@ from core import media
 from core import security
 from core import auth
 from core import evolution
+from core import recherche
 
 st.set_page_config(page_title="Gotchy", page_icon="🤖", layout="wide")
+
+# Petits emojis sympa ajoutes UNIQUEMENT aux reponses du chat (pas ailleurs).
+EMOJIS = ["😊", "🚀", "👍", "💡", "✨", "🤖", "🎉", "🧠", "📚", "🌟"]
+
+# Separateur invisible pour ranger les sources web dans un bouton depliable (comme Gemini).
+SEP_SOURCES = "\n\n[[SOURCES]]\n"
+
+
+def afficher_message(contenu):
+    """Affiche un message. S'il contient des sources web, les cache dans un bouton depliable."""
+    if SEP_SOURCES in contenu:
+        texte, liens = contenu.split(SEP_SOURCES, 1)
+        st.markdown(texte)
+        with st.expander("🔗 Sources"):
+            st.markdown(liens)
+    else:
+        st.markdown(contenu)
 
 # --- CONNEXION : chaque personne entre son pseudo pour avoir SON espace prive ---
 # L'appareil se souvient du pseudo grace au "tiroir secret" du navigateur (localStorage).
@@ -72,7 +91,8 @@ SYSTEME = {
         "Tu n'es PAS limite a l'informatique : tu es un assistant a tout faire. "
         "Reponds toujours en francais, de facon claire, simple et encourageante. "
         "Tu te souviens des conversations precedentes (au-dessus) : NE re-explique PAS en detail "
-        "ce que tu as deja explique a Morgan, reference-le juste brievement (anti-radotage)."
+        "ce que tu as deja explique a Morgan, reference-le juste brievement (anti-radotage). "
+        "Reponds de facon CONCISE et courte, qui donne envie de lire."
     ),
 }
 
@@ -120,25 +140,66 @@ def page_copilote():
     # Afficher tout l'historique (meme celui d'avant, et depuis n'importe quel appareil !)
     for msg in messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            afficher_message(msg["content"])
 
-    # Zone de saisie en bas
-    if question := st.chat_input("Pose ta question a Gotchy..."):
-        # 1) On ajoute et affiche le message de Morgan (+ on le sauve dans le cloud)
-        messages.append({"role": "user", "content": question})
-        memory.ajouter_message(pseudo, "user", question)
+    # Zone de saisie en bas (avec bouton 📎 pour joindre une image / prendre une photo)
+    saisie = st.chat_input(
+        "Pose ta question a Gotchy...",
+        accept_file=True,
+        file_type=["png", "jpg", "jpeg"],
+    )
+    if saisie:
+        texte = saisie.text or ""
+        image = saisie.files[0] if saisie.files else None
+
+        # 1) Message de Morgan (affichage + memoire ; si image, on le note dans l'historique)
+        if image and texte:
+            contenu = f"{texte}  🖼️"
+        elif image:
+            contenu = "🖼️ (image envoyee)"
+        else:
+            contenu = texte
+        messages.append({"role": "user", "content": contenu})
+        memory.ajouter_message(pseudo, "user", contenu)
         with st.chat_message("user"):
-            st.markdown(question)
+            st.markdown(contenu)
+            if image:
+                st.image(image)
 
-        # 2) On demande a l'IA (systeme + 20 derniers messages pour ne pas surcharger)
+        # 2) Reponse : si une image est jointe -> VISION (Qwen), sinon -> chat texte
         with st.chat_message("assistant"):
+            sources_web = []
             with st.spinner("Gotchy reflechit..."):
-                reponse = demander_llm([SYSTEME] + messages[-20:])
-            st.markdown(reponse)
-        messages.append({"role": "assistant", "content": reponse})
+                if image:
+                    question = texte or (
+                        "Analyse cette image. Si c'est un exercice, resous-le et explique etape "
+                        "par etape en francais simple. Sinon, decris-la clairement."
+                    )
+                    reponse = media.analyser_image(image.getvalue(), question, image.type)
+                else:
+                    # D'abord Gotchy se demande s'il a besoin de chercher sur le web (info recente ?)
+                    if recherche.besoin_de_chercher(texte):
+                        reponse, sources_web = recherche.repondre_avec_web(texte)  # cherche
+                    else:
+                        reponse = demander_llm([SYSTEME] + messages[-20:])  # repond de memoire
+                    reponse = f"{reponse} {random.choice(EMOJIS)}"  # emoji sympa (chat texte)
 
-        # 3) On sauve la reponse dans le cloud (marquee au pseudo de la personne)
-        memory.ajouter_message(pseudo, "assistant", reponse)
+            # Si des sources web -> on les range dans le bouton depliable (separateur invisible)
+            if sources_web:
+                liens = "\n".join(
+                    f"- [{r.get('title', '(lien)')}]"
+                    f"({r.get('href') or r.get('link') or r.get('url')})"
+                    for r in sources_web
+                    if (r.get("href") or r.get("link") or r.get("url"))
+                )
+                contenu = f"{reponse}{SEP_SOURCES}{liens}"
+            else:
+                contenu = reponse
+
+            afficher_message(contenu)
+
+        messages.append({"role": "assistant", "content": contenu})
+        memory.ajouter_message(pseudo, "assistant", contenu)
 
 
 # =====================  MODULE 2 : LE STUDIO MEDIA (images)  =====================

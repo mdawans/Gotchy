@@ -23,11 +23,14 @@ def _lire_secret(cle):
 # La cle API Groq (l'IA).
 GROQ_API_KEY = _lire_secret("GROQ_API_KEY")
 
-# Le modele d'IA gratuit qu'on utilise (Llama 3.3 70B via Groq).
-MODELE = "llama-3.3-70b-versatile"
+# Le modele d'IA principal (gpt-oss-120b = grosse IA de raisonnement, la plus maligne sur Groq).
+MODELE = "openai/gpt-oss-120b"
 
 # Le modele VISION de Groq (qui sait REGARDER les images) pour verifier la generation d'images.
 MODELE_VISION = "qwen/qwen3.6-27b"
+
+# Le modele "agent" qui cherche sur internet TOUT SEUL quand il n'est pas sur (avec sources fiables).
+MODELE_RECHERCHE = "groq/compound"
 
 # Supabase (memoire cloud) : adresse + cle secrete.
 SUPABASE_URL = _lire_secret("SUPABASE_URL")

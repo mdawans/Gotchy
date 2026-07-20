@@ -1,5 +1,6 @@
 import urllib.parse
 import base64
+import re
 import time
 import requests
 import config
@@ -62,28 +63,35 @@ def _telecharger_image(url, essais=5):
     return rep.content
 
 
-def verifier_image(image_bytes, demande):
-    """Un modele VISION regarde l'image et dit si elle correspond a la demande.
-    Renvoie (est_bon: bool, avis: str). On juge la FIDELITE a la demande, pas le realisme."""
+def analyser_image(image_bytes, question, mime="image/jpeg"):
+    """Envoie une image + une question au modele VISION (Qwen) et renvoie sa reponse texte.
+    Reutilisable : verification d'image, lecture d'un exercice de devoirs, etc."""
     b64 = base64.b64encode(image_bytes).decode()
     messages = [
         {
             "role": "user",
             "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        f"Regarde cette image. La demande etait : \"{demande}\". Est-ce que l'image "
-                        "correspond FIDELEMENT a la demande (on juge la fidelite a la demande, PAS le "
-                        "realisme du monde reel) ? Reponds en commencant STRICTEMENT par 'OUI' ou 'NON', "
-                        "puis si NON explique en UNE phrase ce qui cloche et doit etre corrige."
-                    ),
-                },
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
             ],
         },
     ]
-    avis = demander_llm(messages, modele=config.MODELE_VISION)
+    reponse = demander_llm(messages, modele=config.MODELE_VISION)
+    # Qwen "reflechit a voix haute" avec un bloc <think>...</think> -> on l'enleve pour une reponse propre
+    propre = re.sub(r"<think>.*?</think>", "", reponse, flags=re.DOTALL).strip()
+    return propre or reponse.strip()
+
+
+def verifier_image(image_bytes, demande):
+    """Un modele VISION regarde l'image et dit si elle correspond a la demande.
+    Renvoie (est_bon: bool, avis: str). On juge la FIDELITE a la demande, pas le realisme."""
+    question = (
+        f"Regarde cette image. La demande etait : \"{demande}\". Est-ce que l'image "
+        "correspond FIDELEMENT a la demande (on juge la fidelite a la demande, PAS le "
+        "realisme du monde reel) ? Reponds en commencant STRICTEMENT par 'OUI' ou 'NON', "
+        "puis si NON explique en UNE phrase ce qui cloche et doit etre corrige."
+    )
+    avis = analyser_image(image_bytes, question)
     est_bon = avis.strip().upper().startswith("OUI")
     return est_bon, avis
 
